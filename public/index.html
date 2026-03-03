@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+  <!-- App styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- MSAL Browser (CDN) -->
+  <script src="https://alcdn.msauth.net/browser/3.13.0/js/msal-browser.min.js"></script>
+</head>
+<body>
+
+  <!-- ── Sidebar ──────────────────────────────────────── -->
+  <aside id="sidebar" class="d-flex flex-column position-fixed top-0 start-0 bottom-0">
+    <a href="#" class="sidebar-brand d-flex align-items-center gap-3 p-3 text-decoration-none flex-shrink-0">
+      <span class="brand-icon d-flex align-items-center justify-content-center">
+        <i class="bi bi-stars"></i>
+      </span>
+      <span class="brand-name">AI Agent</span>
+      <span class="brand-tag rounded-pill ms-1">Beta</span>
+    </a>
+
+    <button id="new-chat-btn" class="d-flex align-items-center justify-content-center gap-2 mx-3 my-2 px-3 py-2">
+      <i class="bi bi-plus-lg"></i> New Conversation
+    </button>
+
+    <div class="sidebar-section-label px-3 py-2">Recent Chats</div>
+
+    <div id="conversation-list" class="flex-grow-1 overflow-y-auto px-2 pb-3">
+      <!-- populated by JS -->
+    </div>
+
+    <div class="sidebar-footer d-flex align-items-center justify-content-center p-3 flex-shrink-0">
+      <div class="sidebar-footer-text">Powered by Azure AI &amp; MSAL</div>
+    </div>
+  </aside>
+
+  <!-- ── Header ──────────────────────────────────────── -->
+  <header id="app-header" class="d-flex align-items-center position-fixed top-0 border-bottom shadow-sm px-4">
+    <div>
+      <div class="header-title">Chat Assistant</div>
+      <div class="header-subtitle">Ask me anything&hellip;</div>
+    </div>
+
+    <div id="header-actions" class="ms-auto d-flex align-items-center gap-2">
+      <button class="header-icon-btn rounded-circle d-flex align-items-center justify-content-center" title="Search" aria-label="Search">
+        <i class="bi bi-search"></i>
+      </button>
+      <button class="header-icon-btn rounded-circle d-flex align-items-center justify-content-center" title="Notifications" aria-label="Notifications">
+        <i class="bi bi-bell"></i>
+      </button>
+      <div class="header-divider mx-1"></div>
+
+      <!-- Pre-auth -->
+      <button id="login-btn" class="d-flex align-items-center gap-2">
+        <i class="bi bi-person-fill"></i> Sign In
+      </button>
+
+      <!-- Post-auth (hidden until signed in) -->
+      <div id="user-info" class="d-none align-items-center gap-3">
+        <div id="user-avatar" class="rounded-circle d-flex align-items-center justify-content-center" title="Account"></div>
+        <span id="user-name"></span>
+        <button id="logout-btn" class="d-flex align-items-center gap-2" title="Sign out">
+          <i class="bi bi-box-arrow-right"></i> Sign Out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main layout ──────────────────────────────────── -->
+  <div id="main-layout" class="d-flex">
+    <section id="chat-area" class="d-flex flex-column overflow-hidden flex-grow-1">
+      <div id="message-list" class="flex-grow-1 overflow-y-auto d-flex flex-column">
+
+        <!-- empty state -->
+        <div id="empty-state" class="flex-grow-1 d-flex flex-column align-items-center justify-content-center text-center p-4">
+          <div class="empty-glow rounded-circle d-flex align-items-center justify-content-center mb-4">
+            <i class="bi bi-stars"></i>
+          </div>
+          <div class="empty-title mb-1">How can I help you today?</div>
+          <p class="empty-sub mb-0">Ask questions, get summaries, generate content &mdash; your AI agent is ready.</p>
+          <div class="d-flex flex-wrap gap-2 justify-content-center mt-4">
+            <div class="empty-chip rounded-pill px-3 py-2" data-prompt="Summarise the latest news in AI">&zwj;&#x1F4A1; Summarise AI news</div>
+            <div class="empty-chip rounded-pill px-3 py-2" data-prompt="Write a short professional bio for me">&#x270D;&#xFE0F; Write a bio</div>
+            <div class="empty-chip rounded-pill px-3 py-2" data-prompt="Explain quantum computing in simple terms">&#x1F52C; Explain quantum computing</div>
+            <div class="empty-chip rounded-pill px-3 py-2" data-prompt="Give me 5 productivity tips">&#x26A1; Productivity tips</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Input bar -->
+      <div id="input-bar-wrap" class="p-3 pb-4 flex-shrink-0">
+        <div id="input-bar" class="d-flex align-items-end gap-2">
+          <textarea
+            id="chat-input"
+            rows="1"
+            class="flex-grow-1"
+            placeholder="Message AI Agent&hellip; (Enter to send, Shift+Enter for new line)"
+            aria-label="Chat message input"
+          ></textarea>
+          <div class="d-flex align-items-center gap-1 flex-shrink-0">
+            <button id="clear-btn" class="rounded-circle d-flex align-items-center justify-content-center" title="Clear conversation" aria-label="Clear conversation">
+              <i class="bi bi-trash3"></i>
+            </button>
+            <button id="send-btn" class="rounded-circle d-flex align-items-center justify-content-center" title="Send message" aria-label="Send message">
+              <i class="bi bi-send-fill"></i>
+            </button>
+          </div>
+        </div>
+        <div class="input-hint text-center mt-2">AI can make mistakes &mdash; verify important information.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- jQuery (DOM operations and AJAX calls) -->
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"
+          integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
+          crossorigin="anonymous"></script>
+  <!-- Bootstrap 5 Bundle (includes Popper.js) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Inject server-side env vars into window.__ENV__ -->
+  <script src="/env-config.js"></script>
+
+  <!-- Auth module -->
+  <script src="auth.js"></script>
+
+  <script>
+    // ── State ──────────────────────────────────────────
+    let conversations = [];   // [{ id, title, messages: [] }]
+    let activeConvoId = null;
+
+    // Cache the empty-state element so it can be detached/reattached
+    const $emptyState = $('#empty-state');
+
+    // ── Helpers ────────────────────────────────────────
+    /** Reusable temp element for HTML escaping (avoids repeated DOM creation). */
+    const $escapeEl = $('<div>');
+    function escapeHtml(str) { return $escapeEl.text(str).html(); }
+
+    /** Avatar icon markup keyed by message role. */
+    const AVATAR_ICON = {
+      user:      '<i class="bi bi-person-fill"></i>',
+      assistant: '<i class="bi bi-stars"></i>',
+    };
+
+    // ── Auth UI ────────────────────────────────────────
+    function showUserUI(account) {
+      const name     = account.name || account.username || 'User';
+      const initials = name.split(' ').map(p => p[0]).join('').slice(0, 2).toUpperCase();
+      $('#user-avatar').text(initials);
+      $('#user-name').text(name);
+      $('#user-info').removeClass('d-none').addClass('d-flex');
+      $('#login-btn').addClass('d-none');
+    }
+
+    function showLoginUI() {
+      $('#user-info').removeClass('d-flex').addClass('d-none');
+      $('#login-btn').removeClass('d-none');
+    }
+
+    // ── Auth events ────────────────────────────────────
+    $('#login-btn').on('click', async function () {
+      try {
+        const result = await login();
+        showUserUI(result.account);
+      } catch (err) {
+        console.error('Login failed:', err);
+      }
+    });
+
+    $('#logout-btn').on('click', async function () {
+      try {
+        await logout();
+        showLoginUI();
+      } catch (err) {
+        console.error('Logout failed:', err);
+      }
+    });
+
+    // ── Conversation helpers ───────────────────────────
+    function createConversation(title) {
+      const id    = Date.now().toString();
+      const convo = { id, title: title || 'New Chat', messages: [] };
+      conversations.unshift(convo);
+      renderConvoList();
+      return convo;
+    }
+
+    function setActiveConvo(id) {
+      activeConvoId = id;
+      renderConvoList();
+      renderMessages();
+    }
+
+    function getActiveConvo() {
+      return conversations.find(c => c.id === activeConvoId) || null;
+    }
+
+    function renderConvoList() {
+      const $list = $('#conversation-list').empty();
+      conversations.forEach(c => {
+        $('<div>')
+          .addClass('convo-item d-flex align-items-center gap-2 px-2 py-2' + (c.id === activeConvoId ? ' active' : ''))
+          .html(`<i class="bi bi-chat-left-text flex-shrink-0"></i><span class="text-truncate">${escapeHtml(c.title)}</span>`)
+          .on('click', () => setActiveConvo(c.id))
+          .appendTo($list);
+      });
+    }
+
+    // ── Message rendering ──────────────────────────────
+    function renderMessages() {
+      const convo  = getActiveConvo();
+      const $list  = $('#message-list').empty();
+      if (!convo || convo.messages.length === 0) {
+        $list.append($emptyState);
+        return;
+      }
+      convo.messages.forEach(msg => appendMessageBubble(msg.role, msg.content, false));
+      $list[0].scrollTop = $list[0].scrollHeight;
+    }
+
+    function appendMessageBubble(role, content, scroll = true) {
+      $emptyState.detach();
+
+      const label    = role === 'user' ? 'You' : 'AI Agent';
+      const $avatar  = $('<div>').addClass('msg-avatar rounded-circle d-flex align-items-center justify-content-center').html(AVATAR_ICON[role]);
+      const $meta    = $('<div>').addClass('msg-meta').text(label);
+      const $bubble  = $('<div>').addClass('msg-bubble').text(content);
+      const $content = $('<div>').addClass('msg-content d-flex flex-column gap-1').append($meta, $bubble);
+      const $row     = $('<div>').addClass(`msg-row ${role} d-flex gap-3`).append($avatar, $content);
+
+      $('#message-list').append($row);
+
+      if (scroll) {
+        const el = $('#message-list')[0];
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    function showTypingIndicator() {
+      const $avatar  = $('<div>').addClass('msg-avatar rounded-circle d-flex align-items-center justify-content-center').html(AVATAR_ICON.assistant);
+      const $dots    = $('<div>').addClass('msg-bubble typing-indicator d-flex align-items-center gap-1').html('<span></span><span></span><span></span>');
+      const $content = $('<div>').addClass('msg-content d-flex flex-column gap-1')
+        .append($('<div>').addClass('msg-meta').text('AI Agent'), $dots);
+      const $row     = $('<div>').addClass('msg-row assistant d-flex gap-3').attr('id', 'typing-row')
+        .append($avatar, $content);
+      $('#message-list').append($row);
+      const el = $('#message-list')[0];
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+      $('#typing-row').remove();
+    }
+
+    // ── Send message ───────────────────────────────────
+    async function sendMessage(text) {
+      text = (text || $('#chat-input').val()).trim();
+      if (!text) return;
+
+      if (!activeConvoId) {
+        const convo = createConversation(text.slice(0, 40));
+        setActiveConvo(convo.id);
+      }
+
+      const convo = getActiveConvo();
+      convo.messages.push({ role: 'user', content: text });
+
+      if (convo.messages.length === 1) {
+        convo.title = text.slice(0, 40);
+        renderConvoList();
+      }
+
+      $('#chat-input').val('').css('height', 'auto');
+      appendMessageBubble('user', text);
+      showTypingIndicator();
+      $('#send-btn').prop('disabled', true);
+
+      try {
+        const apiEndpoint = window.__ENV__?.AGENT_API_ENDPOINT;
+        let reply;
+
+        if (apiEndpoint) {
+          // Acquire a bearer token using the configured API scopes
+          let token = null;
+          try { token = await getAccessToken(); } catch (tokenErr) {
+            console.warn('Token acquisition failed — proceeding without auth:', tokenErr);
+          }
+
+          const ajaxHeaders = {};
+          if (token) ajaxHeaders['Authorization'] = 'Bearer ' + token;
+
+          const data = await $.ajax({
+            url:         apiEndpoint,
+            method:      'POST',
+            contentType: 'application/json',
+            headers:     ajaxHeaders,
+            data:        JSON.stringify({ messages: convo.messages }),
+            dataType:    'json',
+          });
+
+          // Support common API response shapes
+          reply = data.message
+            ?? data.reply
+            ?? data.content
+            ?? data.choices?.[0]?.message?.content
+            ?? JSON.stringify(data);
+        } else {
+          // No endpoint configured — show an informative placeholder
+          await new Promise(r => setTimeout(r, 1000));
+          reply = 'No API endpoint configured. Set AGENT_API_ENDPOINT in your .env to connect your AI agent.';
+        }
+
+        removeTypingIndicator();
+        convo.messages.push({ role: 'assistant', content: reply });
+        appendMessageBubble('assistant', reply);
+      } catch (err) {
+        removeTypingIndicator();
+        // jQuery $.ajax rejects with the jqXHR object; standard errors have .message
+        const status  = err.status ? ` (${err.status} ${err.statusText})` : '';
+        const errMsg  = `Sorry, something went wrong${status}. Please try again.`;
+        convo.messages.push({ role: 'assistant', content: errMsg });
+        appendMessageBubble('assistant', errMsg);
+        console.error('Agent error:', err);
+      } finally {
+        $('#send-btn').prop('disabled', false);
+        $('#chat-input').trigger('focus');
+      }
+    }
+
+    // ── Input bar events ───────────────────────────────
+    $('#send-btn').on('click', () => sendMessage());
+
+    $('#chat-input').on('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    $('#chat-input').on('input', function () {
+      const h = Math.min(this.scrollHeight, 140) + 'px';
+      $(this).css({ height: 'auto' }).css('height', h);
+    });
+
+    $('#clear-btn').on('click', function () {
+      const convo = getActiveConvo();
+      if (convo) { convo.messages = []; renderMessages(); }
+    });
+
+    $('#new-chat-btn').on('click', function () {
+      const convo = createConversation('New Chat');
+      setActiveConvo(convo.id);
+    });
+
+    // Suggestion chips (delegated so it works after detach/reattach)
+    $emptyState.find('.empty-chip').on('click', function () {
+      const prompt = $(this).data('prompt');
+      if (prompt) sendMessage(prompt);
+    });
+
+    // ── Init ───────────────────────────────────────────
+    (async () => {
+      try {
+        await initAuth();
+        const account = getActiveAccount();
+        if (account) showUserUI(account);
+      } catch (err) {
+        console.warn('Auth init failed:', err);
+      }
+    })();
+  </script>
+</body>
+</html>
