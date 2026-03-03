@@ -17,8 +17,10 @@ app.get('/env-config.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.send(
     `window.__ENV__ = ${JSON.stringify({
-      ENTRA_CLIENT_ID: process.env.ENTRA_CLIENT_ID || '',
-      ENTRA_TENANT_ID: process.env.ENTRA_TENANT_ID || '',
+      ENTRA_CLIENT_ID:    process.env.ENTRA_CLIENT_ID    || '',
+      ENTRA_TENANT_ID:    process.env.ENTRA_TENANT_ID    || '',
+      ENTRA_API_SCOPES:   process.env.ENTRA_API_SCOPES   || '',
+      AGENT_API_ENDPOINT: process.env.AGENT_API_ENDPOINT || '',
     })};`
   );
 });

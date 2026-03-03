@@ -37,6 +37,8 @@ Edit `.env` and fill in your values:
 PORT=3000
 ENTRA_CLIENT_ID=<your-app-registration-client-id>
 ENTRA_TENANT_ID=<your-entra-tenant-id>
+ENTRA_API_SCOPES=api://<your-agent-app-id>/Chat.ReadWrite
+AGENT_API_ENDPOINT=https://your-ai-agent-api.example.com/api/chat
 ```
 
 ### 2. Run locally
@@ -73,11 +75,13 @@ The app is available at [http://localhost:3000](http://localhost:3000).
 
 ## Environment Variables
 
-| Variable          | Description                                  | Default  |
-|-------------------|----------------------------------------------|----------|
-| `PORT`            | Port the Express server listens on           | `3000`   |
-| `ENTRA_CLIENT_ID` | Entra ID App Registration client ID          | —        |
-| `ENTRA_TENANT_ID` | Entra ID tenant ID (or `common` for multi)   | —        |
+| Variable              | Description                                                                      | Default  |
+|-----------------------|----------------------------------------------------------------------------------|----------|
+| `PORT`                | Port the Express server listens on                                               | `3000`   |
+| `ENTRA_CLIENT_ID`     | Entra ID App Registration client ID                                              | —        |
+| `ENTRA_TENANT_ID`     | Entra ID tenant ID (or `common` for multi-tenant)                                | —        |
+| `ENTRA_API_SCOPES`    | Space- or comma-separated OAuth2 scopes for the downstream AI Agent API          | —        |
+| `AGENT_API_ENDPOINT`  | Full URL of the AI Agent API; receives `POST { messages }` and may return `{ message }`, `{ reply }`, `{ content }`, or OpenAI-compatible `{ choices }` | —      |
 
 ---
 
@@ -100,4 +104,15 @@ The app is available at [http://localhost:3000](http://localhost:3000).
 
 ## Connecting Your AI Agent API
 
-The chat UI sends messages via `sendMessage()` in `index.html`. Replace the placeholder `TODO` block with a real `fetch` call to your agent API endpoint (e.g. `POST /api/chat`), passing the Bearer token from `getAccessToken()`.
+The chat UI sends messages by `POST`-ing `{ messages: [...] }` to `AGENT_API_ENDPOINT` with a Bearer token acquired using `ENTRA_API_SCOPES`. The UI handles these response shapes from the API:
+
+| Response body field               | Example value                          |
+|-----------------------------------|----------------------------------------|
+| `{ "message": "..." }`            | Generic message field                  |
+| `{ "reply": "..." }`              | Alternate reply field                  |
+| `{ "content": "..." }`            | Content field                          |
+| `{ "choices": [{ "message": { "content": "..." } }] }` | OpenAI-compatible format |
+
+If none of those fields are found, the raw JSON is displayed.
+
+> **Tip:** If `AGENT_API_ENDPOINT` is not set, the chat UI shows a placeholder response so you can still preview the UI without a backend.

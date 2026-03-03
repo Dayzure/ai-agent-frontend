@@ -48,21 +48,34 @@ async function logout() {
 
 /**
  * Acquire an access token silently, falling back to a popup if needed.
- * @param {string[]} scopes - The scopes to request.
+ * Scopes default to ENTRA_API_SCOPES from the server-injected env config.
+ * @param {string[]} [scopes] - Override the default API scopes.
  * @returns {Promise<string>} Bearer access token.
  */
-async function getAccessToken(scopes = ['openid', 'profile']) {
+async function getAccessToken(scopes) {
+  const configured = (window.__ENV__?.ENTRA_API_SCOPES || '')
+    .split(/[\s,]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  let effectiveScopes;
+  if (scopes && scopes.length > 0) {
+    effectiveScopes = scopes;
+  } else if (configured.length > 0) {
+    effectiveScopes = configured;
+  } else {
+    effectiveScopes = ['openid', 'profile'];
+  }
   const instance = getMsalInstance();
   const account = instance.getActiveAccount();
   if (!account) {
     throw new Error('No active account. Please sign in first.');
   }
   try {
-    const response = await instance.acquireTokenSilent({ scopes, account });
+    const response = await instance.acquireTokenSilent({ scopes: effectiveScopes, account });
     return response.accessToken;
   } catch (err) {
     if (err instanceof msal.InteractionRequiredAuthError) {
-      const response = await instance.acquireTokenPopup({ scopes, account });
+      const response = await instance.acquireTokenPopup({ scopes: effectiveScopes, account });
       return response.accessToken;
     }
     throw err;

@@ -896,19 +896,42 @@
       sendBtn.disabled = true;
 
       try {
-        let headers = { 'Content-Type': 'application/json' };
-        try {
-          const token = await getAccessToken();
-          if (token) headers['Authorization'] = `Bearer ${token}`;
-        } catch (_) {
-          // Not authenticated — proceed without token
-        }
+        const apiEndpoint = window.__ENV__?.AGENT_API_ENDPOINT;
+        let reply;
 
-        // TODO: Replace the placeholder below with a real fetch() call to your agent API.
-        // Example: POST to an Express route you add to server.js (e.g. /api/chat),
-        // passing { messages: convo.messages } in the body and the Bearer token in the header.
-        await new Promise(r => setTimeout(r, 1000));
-        const reply = 'This is a placeholder response. Connect your AI agent API to get real answers.';
+        if (apiEndpoint) {
+          // Acquire a bearer token for the downstream API (uses ENTRA_API_SCOPES by default)
+          let token = null;
+          try { token = await getAccessToken(); } catch (tokenErr) {
+            console.warn('Token acquisition failed — proceeding without auth:', tokenErr);
+          }
+
+          const headers = { 'Content-Type': 'application/json' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ messages: convo.messages }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`API responded with ${response.status} ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          // Support common API response shapes: { message }, { reply }, { content },
+          // OpenAI-compatible { choices[0].message.content }, or fall back to raw JSON.
+          reply = data.message
+            ?? data.reply
+            ?? data.content
+            ?? data.choices?.[0]?.message?.content
+            ?? JSON.stringify(data);
+        } else {
+          // No endpoint configured — show a helpful placeholder
+          await new Promise(r => setTimeout(r, 1000));
+          reply = 'No API endpoint configured. Set AGENT_API_ENDPOINT in your .env to connect your AI agent.';
+        }
 
         removeTypingIndicator();
         convo.messages.push({ role: 'assistant', content: reply });
