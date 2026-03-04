@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="style.css" />
 
   <!-- MSAL Browser (CDN) -->
-  <script src="https://alcdn.msauth.net/browser/3.13.0/js/msal-browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js"></script>
 </head>
 <body>
 
@@ -126,7 +126,7 @@
 
   <!-- jQuery (DOM operations and AJAX calls) -->
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"
-          integrity="sha384-OLBgp1GsljhM2TJ+sbHjaiH9txEUvgdDTAzHv2P24donTt6/529l+9Ua0vFImLlb"
+          integrity="sha384-1H217gwSVyLSIfaLxHbE7dRb3v4mYCKbpQvzx0cegeju1MVsGrX5xXxAvs/HgeFs"
           crossorigin="anonymous"></script>
   <!-- Bootstrap 5 Bundle (includes Popper.js) -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -150,11 +150,33 @@
     const $escapeEl = $('<div>');
     function escapeHtml(str) { return $escapeEl.text(str).html(); }
 
+    /**
+     * Render basic Markdown to safe HTML.
+     * Supports: **bold**, *italic*, `code`, and newlines → <br>.
+     */
+    function renderMarkdown(str) {
+      return escapeHtml(str)
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g,     '<em>$1</em>')
+        .replace(/`([^`]+)`/g,     '<code>$1</code>')
+        .replace(/\n/g,            '<br>');
+    }
+
     /** Avatar icon markup keyed by message role. */
     const AVATAR_ICON = {
       user:      '<i class="bi bi-person-fill"></i>',
       assistant: '<i class="bi bi-stars"></i>',
     };
+
+    // ── Input lock ─────────────────────────────────────
+    function setInputLocked(locked) {
+      $('#chat-input')
+        .prop('disabled', locked)
+        .attr('placeholder', locked
+          ? 'Sign in to start chatting…'
+          : 'Message AI Agent… (Enter to send, Shift+Enter for new line)');
+      $('#send-btn, #clear-btn, #new-chat-btn').prop('disabled', locked);
+    }
 
     // ── Auth UI ────────────────────────────────────────
     function showUserUI(account) {
@@ -164,11 +186,13 @@
       $('#user-name').text(name);
       $('#user-info').removeClass('d-none').addClass('d-flex');
       $('#login-btn').addClass('d-none');
+      setInputLocked(false);
     }
 
     function showLoginUI() {
       $('#user-info').removeClass('d-flex').addClass('d-none');
       $('#login-btn').removeClass('d-none');
+      setInputLocked(true);
     }
 
     // ── Auth events ────────────────────────────────────
@@ -238,7 +262,8 @@
       const label    = role === 'user' ? 'You' : 'AI Agent';
       const $avatar  = $('<div>').addClass('msg-avatar rounded-circle d-flex align-items-center justify-content-center').html(AVATAR_ICON[role]);
       const $meta    = $('<div>').addClass('msg-meta').text(label);
-      const $bubble  = $('<div>').addClass('msg-bubble').text(content);
+      const $bubble  = $('<div>').addClass('msg-bubble')
+        [role === 'assistant' ? 'html' : 'text'](role === 'assistant' ? renderMarkdown(content) : content);
       const $content = $('<div>').addClass('msg-content d-flex flex-column gap-1').append($meta, $bubble);
       const $row     = $('<div>').addClass(`msg-row ${role} d-flex gap-3`).append($avatar, $content);
 
@@ -270,6 +295,7 @@
     async function sendMessage(text) {
       text = (text || $('#chat-input').val()).trim();
       if (!text) return;
+      if (!getActiveAccount()) return;
 
       if (!activeConvoId) {
         const convo = createConversation(text.slice(0, 40));
@@ -308,12 +334,13 @@
             method:      'POST',
             contentType: 'application/json',
             headers:     ajaxHeaders,
-            data:        JSON.stringify({ messages: convo.messages }),
+            data:        JSON.stringify({ sessionId: convo.id, chatInput: text }),
             dataType:    'json',
           });
 
           // Support common API response shapes
-          reply = data.message
+          reply = data.output
+            ?? data.message
             ?? data.reply
             ?? data.content
             ?? data.choices?.[0]?.message?.content
@@ -373,6 +400,7 @@
     });
 
     // ── Init ───────────────────────────────────────────
+    setInputLocked(true); // locked until sign-in confirmed
     (async () => {
       try {
         await initAuth();
